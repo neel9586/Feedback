@@ -1,0 +1,16 @@
+{
+  "name": "student-feedback-system",
+  "version": "1.0.0",
+  "description": "Full-Stack Student Feedback Management System with Admin Analytics Dashboard",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "server": "node server/server.js",
+    "client": "npm run dev --prefix client",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "seed": "node server/seeders/seed.js"
+  },
+  "dependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
