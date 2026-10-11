@@ -119,6 +119,112 @@ const seedDatabase = async () => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `);
+  } else if (dbType === 'mysql') {
+    console.log('[Seeder] Creating MySQL tables...');
+    await query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        email VARCHAR(150) NOT NULL UNIQUE,
+        enrollment_number VARCHAR(50) UNIQUE DEFAULT NULL,
+        password VARCHAR(255) NOT NULL,
+        role ENUM('student', 'admin') NOT NULL DEFAULT 'student',
+        course VARCHAR(100) DEFAULT 'IMsc IT',
+        semester VARCHAR(20) DEFAULT 'SEM 7',
+        division VARCHAR(20) DEFAULT 'Div A',
+        academic_year VARCHAR(20) DEFAULT '2026-2027',
+        status ENUM('active', 'inactive') DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS subjects (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        subject_name VARCHAR(150) NOT NULL,
+        subject_code VARCHAR(50) DEFAULT NULL,
+        semester VARCHAR(20) NOT NULL,
+        academic_year VARCHAR(20) NOT NULL DEFAULT '2026-2027',
+        status ENUM('active', 'inactive') DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS faculty (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        faculty_name VARCHAR(150) NOT NULL,
+        email VARCHAR(150) DEFAULT NULL,
+        department VARCHAR(100) DEFAULT 'IMsc IT',
+        status ENUM('active', 'inactive') DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS subject_faculty (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        subject_id INT NOT NULL,
+        faculty_id INT NOT NULL,
+        academic_year VARCHAR(20) NOT NULL DEFAULT '2026-2027',
+        semester VARCHAR(20) NOT NULL,
+        status ENUM('active', 'inactive') DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS feedback_forms (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        course VARCHAR(100) DEFAULT 'IMsc IT',
+        semester VARCHAR(20) NOT NULL,
+        academic_year VARCHAR(20) NOT NULL DEFAULT '2026-2027',
+        start_date DATE DEFAULT NULL,
+        end_date DATE DEFAULT NULL,
+        status ENUM('active', 'inactive') DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS feedback_submissions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        feedback_form_id INT NOT NULL,
+        student_id INT NOT NULL,
+        reference_number VARCHAR(50) UNIQUE NOT NULL,
+        submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_student_form (student_id, feedback_form_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS feedback_questions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        question_text TEXT NOT NULL,
+        question_type VARCHAR(50) DEFAULT 'rating',
+        display_order INT DEFAULT 1,
+        required TINYINT(1) DEFAULT 1,
+        status ENUM('active', 'inactive') DEFAULT 'active'
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS feedback_answers (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        submission_id INT NOT NULL,
+        question_id INT NOT NULL,
+        subject_id INT NOT NULL,
+        faculty_id INT NOT NULL,
+        rating INT NOT NULL,
+        answer_text TEXT DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
   }
 
   // 1. Seed Questions (Google Form 10 Questions)

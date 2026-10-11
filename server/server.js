@@ -21,32 +21,68 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Initialize Database & Seeder
-(async () => {
-  try {
-    await initDB();
-    await seedDatabase();
-  } catch (err) {
-    console.error('[Server Boot] DB Initialization error:', err);
-  }
-})();
+// Ensure database initialization & seeder in Serverless and Local environments
+let isInitialized = false;
+let initPromise = null;
 
-// API Routes
-app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/student', require('./routes/studentRoutes'));
-app.use('/api/admin', require('./routes/adminRoutes'));
+const ensureDBInitialized = async () => {
+  if (isInitialized) return;
+  if (!initPromise) {
+    initPromise = (async () => {
+      try {
+        await initDB();
+        await seedDatabase();
+        isInitialized = true;
+      } catch (err) {
+        console.error('[Server Boot] DB Initialization error:', err);
+      } finally {
+        initPromise = null;
+      }
+    })();
+  }
+  await initPromise;
+};
+
+// Start background init
+ensureDBInitialized();
+
+// Middleware to ensure database is ready before processing API requests
+app.use(async (req, res, next) => {
+  try {
+    await ensureDBInitialized();
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// API Routes (supports both /api/* and direct /* paths for flexible serverless routing)
+const authRoutes = require('./routes/authRoutes');
+const studentRoutes = require('./routes/studentRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+
+app.use('/api/auth', authRoutes);
+app.use('/api/student', studentRoutes);
+app.use('/api/admin', adminRoutes);
+
+app.use('/auth', authRoutes);
+app.use('/student', studentRoutes);
+app.use('/admin', adminRoutes);
 
 // Health check
-app.get('/api/health', (req, res) => {
+const healthCheckHandler = (req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     service: 'Student Feedback Management System API'
   });
-});
+};
 
-// 404 Route handler
-app.use('/api/*', (req, res) => {
+app.get('/api/health', healthCheckHandler);
+app.get('/health', healthCheckHandler);
+
+// 404 Route handler for API
+app.use(['/api/*', '/auth/*', '/student/*', '/admin/*'], (req, res) => {
   res.status(404).json({ success: false, message: 'API Endpoint not found.' });
 });
 
@@ -59,12 +95,14 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`==================================================`);
-  console.log(`🚀 Student Feedback System Server running on port ${PORT}`);
-  console.log(`   Health check: http://localhost:${PORT}/api/health`);
-  console.log(`==================================================`);
-});
+// Start Server when run directly
+if (require.main === module || (!process.env.VERCEL && process.env.NODE_ENV !== 'production')) {
+  app.listen(PORT, () => {
+    console.log(`==================================================`);
+    console.log(`🚀 Student Feedback System Server running on port ${PORT}`);
+    console.log(`   Health check: http://localhost:${PORT}/api/health`);
+    console.log(`==================================================`);
+  });
+}
 
 module.exports = app;
