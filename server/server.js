@@ -95,14 +95,12 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start Server when run directly
-if (require.main === module || (!process.env.VERCEL && process.env.NODE_ENV !== 'production')) {
-  app.listen(PORT, () => {
-    console.log(`==================================================`);
-    console.log(`🚀 Student Feedback System Server running on port ${PORT}`);
-    console.log(`   Health check: http://localhost:${PORT}/api/health`);
-    console.log(`==================================================`);
-  });
-}
+// Start Server
+app.listen(PORT, () => {
+  console.log(`==================================================`);
+  console.log(`🚀 Student Feedback System Server running on port ${PORT}`);
+  console.log(`   Health check: http://localhost:${PORT}/api/health`);
+  console.log(`==================================================`);
+});
 
 module.exports = app;
