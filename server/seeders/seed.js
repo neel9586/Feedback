@@ -262,18 +262,23 @@ const seedDatabase = async () => {
   // 2. Seed Users (Admin & Only One Student: Neel)
   console.log('[Seeder] Seeding Users...');
   const salt = await bcrypt.genSalt(10);
-  const adminPassword = await bcrypt.hash('admin123', salt);
+  const adminEmail = process.env.ADMIN_EMAIL || 'admin@gmail.com';
+  const adminPassRaw = process.env.ADMIN_PASSWORD || 'mscitadmin#2026';
+  const adminPassword = await bcrypt.hash(adminPassRaw, salt);
   const studentPassword = await bcrypt.hash('student123', salt);
 
   // Admin Account
-  const existingAdmin = await query('SELECT id FROM users WHERE email = ?', ['admin@college.edu']);
+  const existingAdmin = await query('SELECT id FROM users WHERE email = ? OR email = ? OR role = ?', [adminEmail, 'admin@college.edu', 'admin']);
   if (existingAdmin.rows.length === 0) {
     await query(
       'INSERT INTO users (name, email, enrollment_number, password, role, course, semester, division, academic_year, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      ['System Administrator', 'admin@college.edu', 'ADMIN001', adminPassword, 'admin', 'IMsc IT', 'ALL', 'N/A', '2026-2027', 'active']
+      ['System Administrator', adminEmail, 'ADMIN001', adminPassword, 'admin', 'IMsc IT', 'ALL', 'N/A', '2026-2027', 'active']
     );
   } else {
-    await query('UPDATE users SET course = ?, academic_year = ? WHERE email = ?', ['IMsc IT', '2026-2027', 'admin@college.edu']);
+    await query(
+      'UPDATE users SET name = ?, email = ?, password = ?, role = ?, course = ?, academic_year = ?, status = ? WHERE id = ?',
+      ['System Administrator', adminEmail, adminPassword, 'admin', 'IMsc IT', '2026-2027', 'active', existingAdmin.rows[0].id]
+    );
   }
 
   // Single Student Account: Neel

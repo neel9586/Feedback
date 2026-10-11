@@ -72,7 +72,7 @@ const AdminLogin = () => {
               <input
                 type="email"
                 className="form-control bg-dark text-light border-secondary"
-                placeholder="admin@college.edu"
+                placeholder="admin@gmail.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
