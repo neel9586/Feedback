@@ -1,7 +1,12 @@
 import axios from 'axios';
 
+// Detect remote backend URL from environment or fallback to relative /api
+const rawBaseURL = import.meta.env.VITE_API_URL || '';
+const cleanBaseURL = rawBaseURL.replace(/\/+$/, '');
+const baseURL = cleanBaseURL ? `${cleanBaseURL}/api` : '/api';
+
 const API = axios.create({
-  baseURL: '/api',
+  baseURL,
   headers: {
     'Content-Type': 'application/json'
   }
