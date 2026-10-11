@@ -281,20 +281,11 @@ const seedDatabase = async () => {
     );
   }
 
-  // Single Student Account: Neel
-  const neelStudent = {
-    name: 'Neel',
-    email: 'neel.student@college.edu',
-    enrollment: '202609001',
-    sem: 'SEM 9',
-    div: 'Div A',
-    year: '2026-2027'
-  };
-
-  await query(
-    'INSERT INTO users (name, email, enrollment_number, password, role, course, semester, division, academic_year, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [neelStudent.name, neelStudent.email, neelStudent.enrollment, studentPassword, 'student', 'IMsc IT', neelStudent.sem, neelStudent.div, neelStudent.year, 'active']
-  );
+  // Ensure all student accounts and student feedback submissions are cleared
+  console.log('[Seeder] Removing all students from database...');
+  await query(`DELETE FROM users WHERE role = 'student'`);
+  await query(`DELETE FROM feedback_submissions`);
+  await query(`DELETE FROM feedback_answers`);
 
   // 3. Seed Faculty Members
   console.log('[Seeder] Seeding Faculty Members...');
