@@ -28,6 +28,8 @@ import ManageSubjects from './pages/admin/ManageSubjects';
 import ManageFaculty from './pages/admin/ManageFaculty';
 import ManageMappings from './pages/admin/ManageMappings';
 import ManageForms from './pages/admin/ManageForms';
+import ExcelUpload from './pages/admin/ExcelUpload';
+import UploadAnalysis from './pages/admin/UploadAnalysis';
 
 const HomeRedirect = () => {
   const { user, loading } = useContext(AuthContext);
@@ -149,6 +151,22 @@ function App() {
             element={
               <AdminRoute>
                 <ManageForms />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/upload-excel"
+            element={
+              <AdminRoute>
+                <ExcelUpload />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/upload-analysis"
+            element={
+              <AdminRoute>
+                <UploadAnalysis />
               </AdminRoute>
             }
           />

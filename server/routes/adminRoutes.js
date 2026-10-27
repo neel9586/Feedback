@@ -43,4 +43,11 @@ router.get('/forms', adminController.getFeedbackForms);
 router.post('/forms', adminController.createForm);
 router.put('/forms/:id/status', adminController.updateFormStatus);
 
+// === Excel / Manual Upload Feature ===
+router.post('/upload-excel', adminController.uploadMiddleware, adminController.uploadExcelFeedback);
+router.get('/upload-history', adminController.getUploadHistory);
+router.delete('/upload-batch/:batchId', adminController.deleteUploadedBatch);
+router.get('/upload-analysis', adminController.getUploadedAnalysis);
+
 module.exports = router;
+

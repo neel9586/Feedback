@@ -100,6 +100,16 @@ const Navbar = () => {
                     <i className="bi bi-table me-1 text-warning"></i>All Feedback
                   </Link>
                 </li>
+                <li className="nav-item">
+                  <Link className="nav-link text-light px-2" to="/admin/upload-excel">
+                    <i className="bi bi-file-earmark-spreadsheet me-1 text-warning"></i>Upload Feedback
+                  </Link>
+                </li>
+                <li className="nav-item">
+                  <Link className="nav-link text-light px-2" to="/admin/upload-analysis">
+                    <i className="bi bi-bar-chart-line me-1 text-warning"></i>Upload Analysis
+                  </Link>
+                </li>
               </>
             )}
           </ul>

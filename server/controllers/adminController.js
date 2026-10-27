@@ -1,4 +1,256 @@
 const { query } = require('../database/db');
+const multer = require('multer');
+const XLSX = require('xlsx');
+
+// Multer: store file in memory for processing
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB
+  fileFilter: (req, file, cb) => {
+    const allowed = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+      'text/csv',
+      'application/csv'
+    ];
+    if (allowed.includes(file.mimetype) || file.originalname.match(/\.(xlsx|xls|csv)$/i)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only Excel (.xlsx/.xls) and CSV files are allowed.'));
+    }
+  }
+});
+exports.uploadMiddleware = upload.single('file');
+
+// Helper: generate a simple unique ID without uuid package
+const genBatchId = () => `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+// 0a. Upload Excel / CSV and parse into manual_feedback table
+exports.uploadExcelFeedback = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded.' });
+    }
+
+    // Parse workbook from buffer
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+    if (!rawRows || rawRows.length === 0) {
+      return res.status(400).json({ success: false, message: 'The uploaded file is empty or has no data rows.' });
+    }
+
+    // Normalize headers (case-insensitive, trim whitespace)
+    const normalize = str => String(str || '').trim().toLowerCase().replace(/[\s_-]+/g, ' ');
+
+    const batchId = genBatchId();
+    const filename = req.file.originalname;
+
+    let inserted = 0;
+    let skipped = 0;
+    const warnings = [];
+
+    for (let i = 0; i < rawRows.length; i++) {
+      const row = rawRows[i];
+      // Map columns flexibly
+      const getCol = (...keys) => {
+        for (const key of Object.keys(row)) {
+          if (keys.some(k => normalize(key) === normalize(k))) return String(row[key] || '').trim();
+        }
+        return '';
+      };
+
+      const studentName  = getCol('student name', 'name', 'student');
+      const enrollNo     = getCol('enrollment number', 'enrollment no', 'enroll no', 'enrollment', 'roll no', 'roll number');
+      const semester     = getCol('semester', 'sem');
+      const academicYear = getCol('academic year', 'year', 'academic yr');
+      const subjectName  = getCol('subject name', 'subject', 'sub name');
+      const subjectCode  = getCol('subject code', 'sub code', 'code');
+      const facultyName  = getCol('faculty name', 'faculty', 'teacher', 'teacher name');
+      const question     = getCol('question', 'question text', 'q');
+      const ratingRaw    = getCol('rating', 'score', 'marks', 'grade');
+      const rating       = parseInt(ratingRaw, 10);
+
+      if (!facultyName && !subjectName) {
+        skipped++;
+        warnings.push(`Row ${i + 2}: Missing both faculty name and subject name – skipped.`);
+        continue;
+      }
+      if (isNaN(rating) || rating < 1 || rating > 5) {
+        skipped++;
+        warnings.push(`Row ${i + 2}: Invalid rating "${ratingRaw}" (must be 1–5) – skipped.`);
+        continue;
+      }
+
+      await query(
+        `INSERT INTO manual_feedback (batch_id, upload_filename, student_name, enrollment_number, semester, academic_year, subject_name, subject_code, faculty_name, question, rating)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [batchId, filename, studentName, enrollNo, semester, academicYear, subjectName, subjectCode, facultyName, question, rating]
+      );
+      inserted++;
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: `Upload complete. ${inserted} rows imported, ${skipped} skipped.`,
+      batchId,
+      inserted,
+      skipped,
+      warnings: warnings.slice(0, 20) // limit warnings shown
+    });
+  } catch (error) {
+    console.error('Error uploading Excel:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Internal server error during Excel upload.' });
+  }
+};
+
+// 0b. Get Upload History (distinct batches)
+exports.getUploadHistory = async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT batch_id, upload_filename,
+             MIN(uploaded_at) as uploaded_at,
+             COUNT(*) as row_count,
+             COUNT(DISTINCT faculty_name) as faculty_count,
+             COUNT(DISTINCT subject_name) as subject_count
+      FROM manual_feedback
+      GROUP BY batch_id, upload_filename
+      ORDER BY MIN(uploaded_at) DESC
+    `);
+    return res.json({ success: true, batches: result.rows });
+  } catch (error) {
+    console.error('Error fetching upload history:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch upload history.' });
+  }
+};
+
+// 0c. Delete an uploaded batch
+exports.deleteUploadedBatch = async (req, res) => {
+  try {
+    const { batchId } = req.params;
+    await query('DELETE FROM manual_feedback WHERE batch_id = ?', [batchId]);
+    return res.json({ success: true, message: 'Batch deleted successfully.' });
+  } catch (error) {
+    console.error('Error deleting batch:', error);
+    return res.status(500).json({ success: false, message: 'Failed to delete batch.' });
+  }
+};
+
+// 0d. Get analysis data from manual_feedback
+exports.getUploadedAnalysis = async (req, res) => {
+  try {
+    const { semester, academic_year, faculty_name, subject_name, batch_id } = req.query;
+
+    let where = 'WHERE 1=1';
+    const params = [];
+    if (semester && semester !== 'ALL') { where += ' AND semester = ?'; params.push(semester); }
+    if (academic_year && academic_year !== 'ALL') { where += ' AND academic_year = ?'; params.push(academic_year); }
+    if (faculty_name && faculty_name !== 'ALL') { where += ' AND faculty_name = ?'; params.push(faculty_name); }
+    if (subject_name && subject_name !== 'ALL') { where += ' AND subject_name = ?'; params.push(subject_name); }
+    if (batch_id && batch_id !== 'ALL') { where += ' AND batch_id = ?'; params.push(batch_id); }
+
+    // Faculty-wise average
+    const facultyAvg = await query(`
+      SELECT faculty_name, AVG(rating) as avg_rating, COUNT(*) as total_ratings,
+             GROUP_CONCAT(DISTINCT semester) as semesters
+      FROM manual_feedback ${where}
+      GROUP BY faculty_name
+      ORDER BY avg_rating DESC
+    `, params);
+
+    // Subject-wise average
+    const subjectAvg = await query(`
+      SELECT subject_name, subject_code, AVG(rating) as avg_rating, COUNT(*) as total_ratings,
+             GROUP_CONCAT(DISTINCT semester) as semesters
+      FROM manual_feedback ${where}
+      GROUP BY subject_name, subject_code
+      ORDER BY avg_rating DESC
+    `, params);
+
+    // Semester-wise average
+    const semesterAvg = await query(`
+      SELECT semester, AVG(rating) as avg_rating, COUNT(*) as total_ratings,
+             COUNT(DISTINCT faculty_name) as faculty_count,
+             COUNT(DISTINCT subject_name) as subject_count
+      FROM manual_feedback ${where}
+      GROUP BY semester
+      ORDER BY semester ASC
+    `, params);
+
+    // Rating distribution (1–5)
+    const distRes = await query(`
+      SELECT rating, COUNT(*) as count
+      FROM manual_feedback ${where}
+      GROUP BY rating
+      ORDER BY rating ASC
+    `, params);
+    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    distRes.rows.forEach(r => { distribution[r.rating] = parseInt(r.count, 10); });
+
+    // Overall stats
+    const statsRes = await query(`
+      SELECT AVG(rating) as avg_rating, COUNT(*) as total_rows,
+             COUNT(DISTINCT faculty_name) as total_faculty,
+             COUNT(DISTINCT subject_name) as total_subjects,
+             COUNT(DISTINCT semester) as total_semesters
+      FROM manual_feedback ${where}
+    `, params);
+    const stats = statsRes.rows[0] || {};
+
+    // Filter options (distinct values in table)
+    const semOpts = await query(`SELECT DISTINCT semester FROM manual_feedback WHERE semester != '' ORDER BY semester`);
+    const yearOpts = await query(`SELECT DISTINCT academic_year FROM manual_feedback WHERE academic_year != '' ORDER BY academic_year`);
+    const facOpts  = await query(`SELECT DISTINCT faculty_name FROM manual_feedback WHERE faculty_name != '' ORDER BY faculty_name`);
+    const subOpts  = await query(`SELECT DISTINCT subject_name FROM manual_feedback WHERE subject_name != '' ORDER BY subject_name`);
+    const batchOpts= await query(`SELECT DISTINCT batch_id, upload_filename, MIN(uploaded_at) as uploaded_at FROM manual_feedback GROUP BY batch_id, upload_filename ORDER BY MIN(uploaded_at) DESC`);
+
+    return res.json({
+      success: true,
+      stats: {
+        avgRating: stats.avg_rating ? parseFloat(Number(stats.avg_rating).toFixed(2)) : 0,
+        totalRows: parseInt(stats.total_rows, 10) || 0,
+        totalFaculty: parseInt(stats.total_faculty, 10) || 0,
+        totalSubjects: parseInt(stats.total_subjects, 10) || 0,
+        totalSemesters: parseInt(stats.total_semesters, 10) || 0
+      },
+      charts: {
+        facultyRatings: facultyAvg.rows.map(r => ({
+          name: r.faculty_name,
+          avgRating: parseFloat(Number(r.avg_rating).toFixed(2)),
+          totalRatings: parseInt(r.total_ratings, 10),
+          semesters: r.semesters
+        })),
+        subjectRatings: subjectAvg.rows.map(r => ({
+          name: r.subject_name,
+          code: r.subject_code,
+          avgRating: parseFloat(Number(r.avg_rating).toFixed(2)),
+          totalRatings: parseInt(r.total_ratings, 10),
+          semesters: r.semesters
+        })),
+        semesterRatings: semesterAvg.rows.map(r => ({
+          semester: r.semester,
+          avgRating: parseFloat(Number(r.avg_rating).toFixed(2)),
+          totalRatings: parseInt(r.total_ratings, 10),
+          facultyCount: parseInt(r.faculty_count, 10),
+          subjectCount: parseInt(r.subject_count, 10)
+        })),
+        ratingDistribution: distribution
+      },
+      filterOptions: {
+        semesters: semOpts.rows.map(r => r.semester),
+        academicYears: yearOpts.rows.map(r => r.academic_year),
+        faculty: facOpts.rows.map(r => r.faculty_name),
+        subjects: subOpts.rows.map(r => r.subject_name),
+        batches: batchOpts.rows
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching upload analysis:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch analysis data.' });
+  }
+};
 
 // 1. Admin Dashboard Analytics Summary
 exports.getDashboardStats = async (req, res) => {

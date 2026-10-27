@@ -119,6 +119,24 @@ const seedDatabase = async () => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS manual_feedback (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        batch_id TEXT NOT NULL,
+        upload_filename TEXT,
+        uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        student_name TEXT,
+        enrollment_number TEXT,
+        semester TEXT,
+        academic_year TEXT,
+        subject_name TEXT,
+        subject_code TEXT,
+        faculty_name TEXT,
+        question TEXT,
+        rating INTEGER
+      );
+    `);
   } else if (dbType === 'mysql') {
     console.log('[Seeder] Creating MySQL tables...');
     await query(`
@@ -223,6 +241,24 @@ const seedDatabase = async () => {
         rating INT NOT NULL,
         answer_text TEXT DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS manual_feedback (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        batch_id VARCHAR(100) NOT NULL,
+        upload_filename VARCHAR(255),
+        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        student_name VARCHAR(150),
+        enrollment_number VARCHAR(50),
+        semester VARCHAR(20),
+        academic_year VARCHAR(20),
+        subject_name VARCHAR(150),
+        subject_code VARCHAR(50),
+        faculty_name VARCHAR(150),
+        question TEXT,
+        rating INT
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
   }
